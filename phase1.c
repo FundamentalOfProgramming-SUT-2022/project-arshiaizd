@@ -2,45 +2,14 @@
 #include<stdlib.h>
 #include <string.h>
 #include <dirent.h>
-#include <errno.h>
-#define UserInsanityCheck() {                           \
-    strcpy(Path , argv[++i]) ;                          \
-    if(argv[i++][0] == '"')                             \
-    {                                                   \
-        int LastChar = strlen(argv[i]);                 \
-        while(!strchr(argv[i++] , '"'))                 \
-        {                                               \
-            Path[LastChar] = ' ';                       \
-            strcat(Path , argv[i]);                     \
-            LastChar += 1 + strlen(argv[i]);            \
-        }                                               \
-        Path[LastChar-1] = '\0';                        \
-                                                        \
-    }                                                   \
-    else i--;                                           \
-}
-
-#define UserInsanityCheck2() {                          \
-    strcpy(SS , argv[++i]) ;                            \
-    if(argv[i++][0] == '"')                             \
-    {                                                   \
-        int LastChar = strlen(argv[i]);                 \
-        while(argv[++i][0] != '-')                      \
-        {                                               \
-            SS[LastChar] = ' ';                         \
-            strcat(SS , argv[i]);                       \
-            LastChar += 1 + strlen(argv[i]);            \
-        }                                               \
-        SS[LastChar-1] = '\0';                          \
-    }                                                   \
-    else i--;                                           \
-}
-char ReferenceFileName[100];
-char Path[1000] , SS[1000 * 1000];
-void CreateFile(char FIleName[]);
+char ReferenceFileName[1000];
+void CreateFile(char FileName[]);
 void Cat(char FileName[]);
-void Removestr(char FileName[] ,int LineNum , int CharNum , int size , char fb);
+void Removestr(char FileName[] ,int LineNum , int CharNum , int size , int fb);
 void Insertstr(char FileName[] , char String[] , int LineNumber , int CharNum);
+void Copy(char FileName[] ,int LineNum , int CharNum , int size , int fb);
+void Cut(char FileName[] ,int LineNum , int CharNum , int size , int fb);
+void Paste(char FileName[] ,int LineNum , int CharNum);
 FILE *Reference(char FileName[]);
 
 
@@ -62,8 +31,8 @@ int main(int argc , char *argv[])
                 printf("Invalid Format! --file");
                 continue;
             }
-            UserInsanityCheck();
-            Cat(Path);
+
+            Cat(argv[++i]);
         }
         else if(!(strcmp(argv[i] , "removestr")))
         {
@@ -71,7 +40,7 @@ int main(int argc , char *argv[])
                 printf("Invalid Format! --file");
                 continue;
             }
-            UserInsanityCheck();
+            int FilePointer = ++i;
             if (!strcmp(argv[++i], "-pos")) {
                 printf("Invalid Format! --pos");
                 continue;
@@ -83,7 +52,8 @@ int main(int argc , char *argv[])
                 continue;
             }
             sscanf(argv[++i] , "%d" , &size);
-            Removestr(Path , LineNum , CharNum , size , argv[++i][1]);
+            int fb = argv[++i][1];
+            Removestr(argv[FilePointer] , LineNum , CharNum , size , fb);
         }
         else if(!(strcmp(argv[i] , "insertstr")))
         {
@@ -91,23 +61,83 @@ int main(int argc , char *argv[])
                 printf("Invalid Format! --file");
                 continue;
             }
-            UserInsanityCheck();
+            int FilePointer = ++i;
+//            printf("%s\n" , argv[FilePointer]);
             if (!strcmp(argv[++i], "-str")) {
                 printf("Invalid Format! --str");
                 continue;
             }
-            UserInsanityCheck2();
+            int StringPointer = ++i;
+//            puts(argv[StringPointer]);
+            int LineNum , CharNum;
+            i++;
+            sscanf(argv[++i] , "%d:%d" , &LineNum , &CharNum);
+            Insertstr(argv[FilePointer] , argv[StringPointer] , LineNum , CharNum);
+        }
+        else if(!(strcmp(argv[i] , "copystr")))
+        {
+            if (!(strcmp(argv[++i], "-file"))) {
+                printf("Invalid Format! --file");
+                continue;
+            }
+            int FilePointer = ++i;
+            if (!strcmp(argv[++i], "-pos")) {
+                printf("Invalid Format! --pos");
+                continue;
+            }
+            int LineNum , CharNum ,size;
+            sscanf(argv[++i] , "%d:%d" , &LineNum , &CharNum);
+            if (!strcmp(argv[++i], "size")) {
+                printf("Invalid Format! -size\n");
+                continue;
+            }
+            sscanf(argv[++i] , "%d" , &size);
+            int fb = argv[++i][1];
+            Copy(argv[FilePointer] , LineNum , CharNum , size , fb);
+        }
+        else if(!(strcmp(argv[i] , "cutstr")))
+        {
+            if (!(strcmp(argv[++i], "-file"))) {
+                printf("Invalid Format! --file");
+                continue;
+            }
+            int FilePointer = ++i;
+            if (!strcmp(argv[++i], "-pos")) {
+                printf("Invalid Format! --pos");
+                continue;
+            }
+            int LineNum , CharNum ,size;
+            sscanf(argv[++i] , "%d:%d" , &LineNum , &CharNum);
+            if (!strcmp(argv[++i], "size")) {
+                printf("Invalid Format! -size\n");
+                continue;
+            }
+            sscanf(argv[++i] , "%d" , &size);
+            int fb = argv[++i][1];
+            Cut(argv[FilePointer] , LineNum , CharNum , size , fb);
+        }
+        else if(!(strcmp(argv[i] , "pastestr")))
+        {
+            if (!(strcmp(argv[++i], "-file"))) {
+                printf("Invalid Format! --file");
+                continue;
+            }
+            int FilePointer = ++i;
+            if (!strcmp(argv[++i], "-pos")) {
+                printf("Invalid Format! --pos");
+                continue;
+            }
             int LineNum , CharNum;
             sscanf(argv[++i] , "%d:%d" , &LineNum , &CharNum);
-            Insertstr(Path , SS , LineNum , CharNum);
+            Paste(argv[FilePointer] , LineNum , CharNum);
         }
     }
     return 0;
 }
 
-void CreateFile(char FIleName[])
+void CreateFile(char FileName[])
 {
-    char *token = strtok(FIleName , "/");
+    char *token = strtok(FileName , "/");
     while(token != NULL)
     {
         if(strchr(token , '.')) {
@@ -156,16 +186,21 @@ void Cat(char FileName[])
     return;
 }
 
-void Removestr(char FileName[] ,int LineNum , int CharNum , int size , char fb)
+void Removestr(char FileName[] ,int LineNum , int CharNum , int size , int fb)
 {
-    int temp;
+ int temp;
     FILE *file = Reference(FileName);
     FILE *destination = fopen("destination.txt", "wb+");
     fseek(file , 0 , SEEK_SET);
     for(int j = 1 ; j < LineNum ; j++) {
         temp = 'A';
-        while (temp != '\n') {
+        while (temp != '\r') {
             temp = fgetc(file);
+            if(temp == EOF)
+            {
+                printf("That location Does Not Exist!!\n");
+                exit(1);
+            }
             fprintf(destination, "%c", temp);
         }
     }
@@ -196,13 +231,84 @@ void Removestr(char FileName[] ,int LineNum , int CharNum , int size , char fb)
     return;
 }
 
+
 void Insertstr(char FileName[] , char String[] , int LineNum , int CharNum)
 {
-    int temp;
+    int temp , flag = 0;
     FILE *file = Reference(FileName);
     FILE *destination = fopen("destination.txt", "wb+");
-    fputs(String , file);
+    fseek(file , 0 , SEEK_SET);
+    for(int j = 1 ; j < LineNum ; j++) {
+        temp = 'A';
+        while (temp != '\r') {
+            temp = fgetc(file);
+            if(temp == EOF)
+            {
+                printf("That line does not exist yet!!\n");
+                exit(-1);
+            }
+
+            fputc(temp, destination);
+        }
+    }
+    for(int j = 0; j <= CharNum-1;j++) {
+        temp = fgetc(file);
+        if(temp == EOF)
+        {
+            printf("That place does not exist yet!!\n");
+            exit(-1);
+        }
+        if(temp == '\r')
+        {
+            printf("%d " , j);
+            for(int k = 0; k < CharNum - j;k++)
+                fputs(" ", destination);
+            break;
+        }
+        fprintf(destination, "%c", temp);
+    }
+    for(int k = 0;k < strlen(String);k++) {
+        temp = String[k];
+        if(temp == '\\' && !flag)
+            {
+                flag = 1;
+                continue;
+            }
+        else if(flag && temp == '\\')
+        {
+            fprintf(destination , "\\");
+            flag = 0;
+            continue;
+        }
+        else if(flag && temp == 'n')
+        {
+            fprintf(destination , "\n");
+            flag = 0;
+            continue;
+        }
+        else if(temp == '\'') {
+            fputc('\"', destination);
+            continue;
+        }
+        fputc(temp , destination);
+    }
+    while(1)
+    {
+        int temp2 = fgetc(file);
+        if(feof(file))
+            break;
+        fprintf(destination, "%c", temp2);
+    }
+    fclose(file);
+    fclose(destination);
+    remove(ReferenceFileName);
+    rename("destination.txt" , ReferenceFileName);
+    printf("String Successfully Inserted!\n");
+    return;
 }
+
+
+
 
 
 
@@ -230,15 +336,10 @@ FILE* Reference(char FileName[])
     }
     FILE *temp;
     sprintf(ReferenceFileName,"%s", token);
-    temp = fopen(token , "r+");
+    temp = fopen(token , "r");
     if(temp) {
         fclose(temp);
-        temp = fopen(token , "a+");
-        if(!temp)
-        {
-            printf("There Is NO Such File\n");
-            exit(1);
-        }
+        temp = fopen(token , "ab+");
         return temp;
     }
     else {
