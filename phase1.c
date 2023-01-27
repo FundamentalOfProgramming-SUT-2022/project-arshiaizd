@@ -2,12 +2,13 @@
 #include<stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#include <fileapi.h>
 char ReferenceFileName[1000];
-void CreateFile(char FileName[]);
+void CreateFile2(char FileName[]);
 void Cat(char FileName[]);
-void Removestr(char FileName[] ,int LineNum , int CharNum , int size , int fb);
-void Insertstr(char FileName[] , char String[] , int LineNumber , int CharNum);
-void Copy(char FileName[] ,int LineNum , int CharNum , int size , int fb);
+void Removestr(char FileName[] ,int LineNum , int CharNum , int size , int fb ,int handle);
+void Insertstr(char FileName[] , FILE* tempfile , int LineNumber , int CharNum , int handle);
+void Copy(char FileName[] ,int LineNum , int CharNum , int size , int fb , int handle);
 void Cut(char FileName[] ,int LineNum , int CharNum , int size , int fb);
 void Paste(char FileName[] ,int LineNum , int CharNum);
 FILE *Reference(char FileName[]);
@@ -24,7 +25,7 @@ int main(int argc , char *argv[])
                 printf("Invalid Format! --file");
                 continue;
             }
-            CreateFile(argv[++i]);
+            CreateFile2(argv[++i]);
         }
         else if(!strcmp(argv[i] , "cat")) {
             if (!strcmp(argv[++i], "-file")) {
@@ -53,7 +54,7 @@ int main(int argc , char *argv[])
             }
             sscanf(argv[++i] , "%d" , &size);
             int fb = argv[++i][1];
-            Removestr(argv[FilePointer] , LineNum , CharNum , size , fb);
+            Removestr(argv[FilePointer] , LineNum , CharNum , size , fb , 0);
         }
         else if(!(strcmp(argv[i] , "insertstr")))
         {
@@ -62,17 +63,16 @@ int main(int argc , char *argv[])
                 continue;
             }
             int FilePointer = ++i;
-//            printf("%s\n" , argv[FilePointer]);
             if (!strcmp(argv[++i], "-str")) {
                 printf("Invalid Format! --str");
                 continue;
             }
-            int StringPointer = ++i;
-//            puts(argv[StringPointer]);
+            FILE *tempfile = fopen("tempfile.txt" , "wb+");
+            fprintf(tempfile , "%s" , argv[++i]);
             int LineNum , CharNum;
             i++;
             sscanf(argv[++i] , "%d:%d" , &LineNum , &CharNum);
-            Insertstr(argv[FilePointer] , argv[StringPointer] , LineNum , CharNum);
+            Insertstr(argv[FilePointer] , tempfile , LineNum , CharNum , 0);
         }
         else if(!(strcmp(argv[i] , "copystr")))
         {
@@ -93,7 +93,7 @@ int main(int argc , char *argv[])
             }
             sscanf(argv[++i] , "%d" , &size);
             int fb = argv[++i][1];
-            Copy(argv[FilePointer] , LineNum , CharNum , size , fb);
+            Copy(argv[FilePointer] , LineNum , CharNum , size , fb , 0);
         }
         else if(!(strcmp(argv[i] , "cutstr")))
         {
@@ -135,7 +135,7 @@ int main(int argc , char *argv[])
     return 0;
 }
 
-void CreateFile(char FileName[])
+void CreateFile2(char FileName[])
 {
     char *token = strtok(FileName , "/");
     while(token != NULL)
@@ -186,9 +186,9 @@ void Cat(char FileName[])
     return;
 }
 
-void Removestr(char FileName[] ,int LineNum , int CharNum , int size , int fb)
+void Removestr(char FileName[] ,int LineNum , int CharNum , int size , int fb , int handle)
 {
- int temp;
+    int temp;
     FILE *file = Reference(FileName);
     FILE *destination = fopen("destination.txt", "wb+");
     fseek(file , 0 , SEEK_SET);
@@ -227,12 +227,14 @@ void Removestr(char FileName[] ,int LineNum , int CharNum , int size , int fb)
     fclose(destination);
     remove(ReferenceFileName);
     rename("destination.txt" , ReferenceFileName);
+    if(handle)
+        return;
     printf("File Successfully Edited!\n");
     return;
 }
 
 
-void Insertstr(char FileName[] , char String[] , int LineNum , int CharNum)
+void Insertstr(char FileName[] , FILE *tempfile , int LineNum , int CharNum ,int handle)
 {
     int temp , flag = 0;
     FILE *file = Reference(FileName);
@@ -267,8 +269,10 @@ void Insertstr(char FileName[] , char String[] , int LineNum , int CharNum)
         }
         fprintf(destination, "%c", temp);
     }
-    for(int k = 0;k < strlen(String);k++) {
-        temp = String[k];
+    fseek(tempfile , 0 , SEEK_SET);
+    while(1) {
+        temp = fgetc(tempfile);
+        if(temp == EOF) break;
         if(temp == '\\' && !flag)
             {
                 flag = 1;
@@ -292,6 +296,8 @@ void Insertstr(char FileName[] , char String[] , int LineNum , int CharNum)
         }
         fputc(temp , destination);
     }
+    fclose(tempfile);
+    DeleteFileA("tempfile.txt");
     while(1)
     {
         int temp2 = fgetc(file);
@@ -303,13 +309,84 @@ void Insertstr(char FileName[] , char String[] , int LineNum , int CharNum)
     fclose(destination);
     remove(ReferenceFileName);
     rename("destination.txt" , ReferenceFileName);
-    printf("String Successfully Inserted!\n");
+    if(handle) return;
+    printf("String Successfully Edited!\n");
     return;
 }
 
+void Copy(char FileName[] ,int LineNum , int CharNum , int size , int fb ,int handle)
+{
+    char temp;
+    FILE *file = Reference(FileName);
+    chdir("system");
+    DeleteFileA("clipboard.txt");
+    FILE *clipboard = fopen("clipboard.txt", "wb+");
+    fseek(file , 0 , SEEK_SET);
+    for(int j = 1 ; j < LineNum ; j++) {
+        temp = 'A';
+        while (temp != '\r') {
+            temp = fgetc(file);
+            fflush(stdout);
+            if(temp == EOF)
+            {
+                printf("That line does not exist!!\n");
+                exit(-1);
+            }
 
+        }
+    }
+    for(int j = 0; j <= CharNum-1;j++) {
+        temp = fgetc(file);
+        if(temp == EOF)
+        {
+            printf("That place does not exist yet!!\n");
+            exit(-1);
+        }
+        if(temp == '\n')
+        {
+            printf("There Is Not Enough Character In This Line\n");
+            exit(1);
+        }
+    }
+    if(fb == 'b') {
+        fseek(file , -size  , SEEK_CUR);
+    }
+    for(int k = 0; k < size; k++)
+    {
+        char temp2;
+        temp2 = fgetc(file);
+        if(temp == EOF)
+        {
+            printf("Pointer Reached End of File\n");
+            break;
+        }
+        fputc(temp2 , clipboard);
+    }
+    fclose(file);
+    fclose(clipboard);
+    SetFileAttributesA("clipboard.txt" , FILE_ATTRIBUTE_HIDDEN);
+    chdir("..");
+    if(handle) return;
+    printf("String Successfully Copied\n");
+}
 
+void Cut(char FileName[] ,int LineNum , int CharNum , int size , int fb)
+{
+    Copy(FileName , LineNum , CharNum , size ,fb ,1);
+    Removestr(FileName , LineNum , CharNum , size , fb ,1);
+    printf("String Successfully Cut\n");
+    return;
+}
 
+void Paste(char FileName[] ,int LineNum , int CharNum)
+{
+    chdir("system");
+    FILE *tempfile = fopen("clipboard.txt" , "rb+");
+    chdir("..");
+    Insertstr(FileName , tempfile , LineNum , CharNum , 1);
+    printf("String Successfully Pasted!\n");
+    return;
+}
 
 
 
@@ -344,7 +421,8 @@ FILE* Reference(char FileName[])
     }
     else {
         fclose(temp);
-        printf("Invalid File Name\n");
+        mkdir("BYEEe");
+        printf("Invalid File Name! %s\n" , token);
         exit(-1);
     }
 }
